@@ -1,5 +1,4 @@
 use std::env;
-use std::io;
 use std::path::PathBuf;
 
 mod builder;
@@ -8,7 +7,7 @@ mod template;
 
 use crate::builder::build_site;
 
-fn main() -> io::Result<()> {
+fn main() {
     let args: Vec<String> = env::args().collect();
 
     let source_dir = args
@@ -21,8 +20,8 @@ fn main() -> io::Result<()> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("./output"));
 
-    let _ = build_site(&source_dir, &output_dir);
-
-    println!("Site built successfully at {}", output_dir.display());
-    Ok(())
+    match build_site(&source_dir, &output_dir) {
+        Ok(_) => println!("Site built successfully at {}", output_dir.display()),
+        Err(e) => eprintln!("Error building site: {e:?}"),
+    };
 }

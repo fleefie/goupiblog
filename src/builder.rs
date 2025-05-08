@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process;
 
 use std::fs;
+use std::fs::copy;
 use std::io;
 use std::path::Path;
 
@@ -15,15 +16,33 @@ use markdown::Constructs;
 use markdown::Options;
 use markdown::ParseOptions;
 
-pub fn build_site(source_dir: &PathBuf, output_dir: &PathBuf) -> Result<(), std::io::Error> {
-    fs::create_dir_all(&output_dir)?;
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum PostBuildError {
+    GeneralIOError(std::io::Error),
+    TemplateBuildError(std::io::Error),
+    MissingRequiredKey(String),
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum SiteBuildError {
+    CannotLoadConfig(std::io::Error),
+    CannotLoadPrelude(std::io::Error),
+    CannotLoadPosts(String),
+    GeneralIOError(std::io::Error),
+    MissingRequiredKey(String),
+}
+
+pub fn build_site(source_dir: &PathBuf, output_dir: &PathBuf) -> Result<(), SiteBuildError> {
+    match fs::create_dir_all(&output_dir) {
+        Ok(_) => (),
+        Err(e) => return Err(SiteBuildError::GeneralIOError(e)),
+    };
 
     let site_config = match config::load_config(&source_dir.join("site.toml")) {
         Ok(config) => config,
-        Err(err) => {
-            eprintln!("Failed to load site configuration: {}", err);
-            process::exit(1);
-        }
+        Err(e) => return Err(SiteBuildError::CannotLoadConfig(e)),
     };
 
     for req_key in ["Site"] {
@@ -36,30 +55,59 @@ pub fn build_site(source_dir: &PathBuf, output_dir: &PathBuf) -> Result<(), std:
     let site_resources = source_dir.join("res");
     if site_resources.exists() {
         let output_res = output_dir.join("res");
-        fs::create_dir_all(&output_res)?;
-        copy_directory(&site_resources, &output_res)?;
+        match fs::create_dir_all(&output_res) {
+            Ok(_) => (),
+            Err(e) => return Err(SiteBuildError::GeneralIOError(e)),
+        };
+
+        match copy_directory(&site_resources, &output_res) {
+            Ok(_) => (),
+            Err(e) => return Err(SiteBuildError::GeneralIOError(e)),
+        };
+    }
+
+    let site_index = source_dir.join("index.html");
+    if site_index.exists() {
+        match copy(&site_index, &output_dir.join("index.html")) {
+            Ok(_) => (),
+            Err(e) => return Err(SiteBuildError::GeneralIOError(e)),
+        }
     }
 
     let prelude_path = source_dir.join("prelude.html");
     let prelude = match fs::read_to_string(&prelude_path) {
         Ok(content) => content,
         Err(err) => {
-            eprintln!("Failed to read prelude.html: {}", err);
-            process::exit(1);
+            return Err(SiteBuildError::CannotLoadPrelude(err));
         }
     };
 
     let posts_dir = source_dir.join("posts");
     if !posts_dir.exists() {
-        eprintln!("Posts directory does not exist: {}", posts_dir.display());
-        process::exit(1);
+        return Err(SiteBuildError::CannotLoadPosts(
+            "Posts directory does not exist".to_string(),
+        ));
     }
 
-    for entry in fs::read_dir(posts_dir)? {
-        let post_dir = entry?.path();
+    let entries = match fs::read_dir(posts_dir) {
+        Ok(v) => v,
+        Err(e) => return Err(SiteBuildError::GeneralIOError(e)),
+    };
+
+    for entry in entries {
+        let post_dir = match entry {
+            Ok(p) => p.path(),
+            Err(e) => return Err(SiteBuildError::GeneralIOError(e)),
+        };
 
         if post_dir.is_dir() {
-            process_post(&post_dir, &output_dir, &site_config, &prelude)?;
+            match process_post(&post_dir, &output_dir, &site_config, &prelude) {
+                Ok(_) => continue,
+                Err(e) => {
+                    eprintln!("Failed to build post: {e:?}. Continuing...");
+                    continue;
+                }
+            };
         }
     }
 
@@ -71,7 +119,7 @@ fn process_post(
     output_dir: &Path,
     site_config: &HashMap<String, toml::Value>,
     prelude: &str,
-) -> io::Result<()> {
+) -> Result<(), PostBuildError> {
     let post_toml_path = post_dir.join("post.toml");
     let content_path = post_dir.join("content.md");
 
@@ -83,36 +131,20 @@ fn process_post(
 
     let post_config = match config::load_config(&post_toml_path) {
         Ok(config) => config,
-        Err(err) => {
-            eprintln!(
-                "Failed to load post configuration from {}: {}",
-                post_toml_path.display(),
-                err
-            );
-            return Ok(());
+        Err(e) => {
+            return Err(PostBuildError::GeneralIOError(e));
         }
     };
 
     for req_key in ["Title", "Description"] {
         if !post_config.contains_key(req_key) {
-            eprintln!(
-                "Missing required '{req_key}' field in {}",
-                post_toml_path.display()
-            );
-            return Ok(()); // HACK: RETURNS OK INSTEAD OF AN ERROR!!!!
+            return Err(PostBuildError::MissingRequiredKey(req_key.to_string()));
         }
     }
 
     let markdown_content = match fs::read_to_string(&content_path) {
         Ok(content) => content,
-        Err(err) => {
-            eprintln!(
-                "Failed to read content from {}: {}",
-                content_path.display(),
-                err
-            );
-            return Ok(());
-        }
+        Err(err) => return Err(PostBuildError::GeneralIOError(err)),
     };
 
     // Transpile the markdown.
@@ -151,24 +183,35 @@ fn process_post(
 
     let post_name = post_dir.file_name().unwrap().to_string_lossy();
     let post_output_dir = output_dir.join(&*post_name);
-    fs::create_dir_all(&post_output_dir)?;
+    match fs::create_dir_all(&post_output_dir) {
+        Ok(_) => (),
+        Err(e) => return Err(PostBuildError::GeneralIOError(e)),
+    };
 
     match process_template(prelude, &post_config, site_config, &html_content) {
         Ok(processed) => {
-            fs::write(post_output_dir.join("index.html"), processed)?;
-
+            match fs::write(post_output_dir.join("index.html"), processed) {
+                Ok(_) => (),
+                Err(e) => return Err(PostBuildError::GeneralIOError(e)),
+            }
             let post_resources = post_dir.join("res");
             if post_resources.exists() {
                 let post_res_dir = post_output_dir.join("res");
-                fs::create_dir_all(&post_res_dir)?;
-                copy_directory(&post_resources, &post_res_dir)?;
+
+                match fs::create_dir_all(&post_res_dir) {
+                    Ok(_) => (),
+                    Err(e) => return Err(PostBuildError::GeneralIOError(e)),
+                };
+
+                match copy_directory(&post_resources, &post_res_dir) {
+                    Ok(_) => (),
+                    Err(e) => return Err(PostBuildError::GeneralIOError(e)),
+                }
             }
 
             println!("  Built post: {}", post_name);
         }
-        Err(err) => {
-            eprintln!("  Failed to process template for {}: {}", post_name, err);
-        }
+        Err(e) => return Err(PostBuildError::TemplateBuildError(e)),
     }
 
     Ok(())

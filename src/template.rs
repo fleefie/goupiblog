@@ -1,6 +1,6 @@
+use chrono::{DateTime, Local};
 use std::collections::HashMap;
 use std::io;
-use std::time::{SystemTime, UNIX_EPOCH};
 use toml::Value;
 
 pub fn process_template(
@@ -15,12 +15,9 @@ pub fn process_template(
 
     // Date has some special handling for formatting
     if result.contains("<GoupiDate/>") {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let date_str = format_date(now);
-        result = result.replace("<GoupiDate/>", &date_str);
+        let current_local: DateTime<Local> = Local::now();
+        let current_time = current_local.format("%Y-%m-%d %H:%M:%S").to_string();
+        result = result.replace("<GoupiDate/>", &current_time);
     }
 
     let mut tags = Vec::new();
@@ -69,34 +66,4 @@ fn toml_value_to_string(value: &Value) -> String {
         Value::Array(_) => "[array]".to_string(), // Meh. That's for later.
         Value::Table(_) => "[table]".to_string(),
     }
-}
-
-// This fucking sucks and I need to create a proper crate for it.
-fn format_date(timestamp: u64) -> String {
-    let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    let months = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
-
-    let days_since_epoch = timestamp / (24 * 60 * 60);
-    let weekday = days[(days_since_epoch % 7) as usize];
-
-    let years = 1970 + (days_since_epoch / 365);
-    let days_in_year = days_since_epoch % 365;
-
-    let mut month = 0;
-    let days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let mut days_left = days_in_year;
-
-    for (i, &days) in days_in_month.iter().enumerate() {
-        if days_left < days {
-            month = i;
-            break;
-        }
-        days_left -= days;
-    }
-
-    let day = days_left + 1;
-
-    format!("{}, {} {} {}", weekday, day, months[month], years)
 }

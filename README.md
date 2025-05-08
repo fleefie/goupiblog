@@ -44,21 +44,23 @@ A post's directory contains the following:
 - A res directory, for page-specific resources.
 - The ``post.toml``, specifying post-specific variables
 
-The target directory contains the generated website, as well as 
-``last_updated.toml``, a file containing the timestamp for each page's
-last update, to allow rebuilding already built pages.
-
 ## The workflow
 
 In order to create your own Goupiblog, you need to:
 
 - Set up your directory structure
 - Create your prelude (Or use the one provided!)
+- Add an index
 - Set up site-wide options
 - Create your first post
 - Host the post on a simple file server
 
 We'll get into each of the steps below.
+
+#### The index
+
+The index will be generated for you in the future. For now,
+make your own called "index.html" in the root of the sources directory.
 
 #### The prelude and the options
 
