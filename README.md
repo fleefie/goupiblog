@@ -35,14 +35,13 @@ And that's it! Your pages are now ready to go.
 
 Goupiblog sources contain the following:
 - A site.toml file, defining a few site-wide variables
-- A resources directory, containing site-wide resources
+- A res directory, containing site-wide resources
 - The prelude.html file
 - A posts directory, containing one directory per post.
 
 A post's directory contains the following:
-- ``index.md``, the page to be added to the template
-- ``index.html``, if you don't feel like using MD
-- A resources directory, for page-specific resources.
+- ``content.md``, the page to be added to the template
+- A res directory, for page-specific resources.
 - The ``post.toml``, specifying post-specific variables
 
 The target directory contains the generated website, as well as 
@@ -61,12 +60,12 @@ In order to create your own Goupiblog, you need to:
 
 We'll get into each of the steps below.
 
-#### The prelude
+#### The prelude and the options
 
 Your prelude is an HTML file that contains the template for your site. 
 It may feature special tags that will be replaced during transpilation. 
 In fact, it probably should, otherwise, you'll just serve the template!
-Here is a list of tags:
+Here is a list of hard-coded tags:
 
 | Tag                   | Replacement                           |
 |-----------------------|---------------------------------------|
@@ -74,31 +73,15 @@ Here is a list of tags:
 | ``<GoupiSite/>``      | The name of the site                  |
 | ``<GoupiTitle/>``     | The title of the post                 |
 | ``<GoupiDesc/>``      | The short description of the post.    |
-| ``<GoupiAuthor/>``    | The author of the post                |
 | ``<GoupiDate/>``      | The upload or update date of the post |
 
-#### The options
+Out of these, ``<GoupiContent/>`` and ``<GoupiDate/>`` are hard-coded.
+The content contains the post, and the date is hard-coded to resolve to post
+build and update date and time. The others are mandatory for the sake of
+building the index.
 
-Here is a list of site-wide options:
-
-```toml
-[site]
-url = "https://yourwebsite.tld"
-name = "Your fancy schamcy website name here"
-# Note: This variable is never read. If you use Goupiblog, it's GPL :)
-license = "Whatever"
-description = "Hi, welcome to my website!'; DROP TABLE USERS '"
-use_post_title_as_page_title = true
-```
-
-As for the post-specific options:
-
-```toml
-[post]
-title = "My rant about R4L that nobody asked for"
-description = "Today I argue why we should start JS4L instead."
-author = "Me, obviously."
-```
+You may define your own variables however you want. Just remember,
+whatever is after ``<Goupi`` must be replicated one-to-one in the TOML!
 
 #### The post
 
@@ -112,6 +95,8 @@ sources/my-post-title/ ==> target/my-post-title/
  |  + myimage.png             + myimage.png
  + post.toml               
 ```
+
+Your post may contain any HTML tag, including Goupi's own tags!
 
 ## Useless info and random trivia. You can stop reading here.
 
@@ -138,3 +123,6 @@ project's scope.
 to do what I want it to do without bugs. When that day comes, I'll archive the
 repository. The code is done. Finished software does not need maintenance.
 1.0.0 will be the final version.
+- Goupiblog is named after the ancient french goupil, meaning fox. I found it
+cute. Stripped the L from it because it just felt weird to say otherwise.
+It's pronounced "goo-pee-blog" !
