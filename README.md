@@ -1,5 +1,7 @@
 # Goupiblog
-*a no BS, no JS, no nonsense blog-like static website generator and provider.*
+*A no BS, no JS, no nonsense blog-like static website generator and provider.*
+
+[![Build](https://github.com/fleefie/goupiblog/actions/workflows/rust.yml/badge.svg)](https://github.com/fleefie/goupiblog/actions/workflows/rust.yml)
 
 I've always found most blogging tools to be a bloated mess. Goupiblog aims to
 fix this.
