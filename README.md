@@ -52,7 +52,7 @@ In order to create your own Goupiblog, you need to:
 
 - Set up your directory structure
 - Create your prelude (Or use the one provided!)
-- Add an index
+- (In the future!) create an index template
 - Set up site-wide options
 - Create your first post
 - Host the post on a simple file server
@@ -61,8 +61,9 @@ We'll get into each of the steps below.
 
 #### The index
 
-The index will be generated for you in the future. For now,
-make your own called "index.html" in the root of the sources directory.
+For now, the index is generated automatically, but is very basic.
+I'll figure out how to make it templated too soon:tm:. Regardless,
+it's available under ``target_dir/index.html``
 
 #### The prelude and the options
 
