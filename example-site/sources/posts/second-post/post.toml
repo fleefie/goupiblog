@@ -1,0 +1,4 @@
+Title = "Second Post"
+Description = "My second post on my Goupiblog"
+# No author specified, will fall back to site.toml
+CustomTag = "This is a custom tag value!"
