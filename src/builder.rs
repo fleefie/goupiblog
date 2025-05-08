@@ -107,10 +107,8 @@ pub fn build_site(source_dir: &PathBuf, output_dir: &PathBuf) -> Result<(), Site
 
         if post_dir.is_dir() {
             match process_post(&post_dir, &output_dir, &site_config, &prelude) {
-                Ok(post) => {
-                    if let Some(post_info) = post {
-                        post_infos.push(post_info);
-                    }
+                Ok(post_info) => {
+                    post_infos.push(post_info);
                 }
                 Err(e) => {
                     eprintln!("Failed to build post: {e:?}. Continuing...");
@@ -149,7 +147,7 @@ fn process_post(
     output_dir: &Path,
     site_config: &HashMap<String, toml::Value>,
     prelude: &str,
-) -> Result<Option<PostInfo>, PostBuildError> {
+) -> Result<PostInfo, PostBuildError> {
     let post_toml_path = post_dir.join("post.toml");
     let content_path = post_dir.join("content.md");
 
@@ -214,29 +212,35 @@ fn process_post(
     let post_name = post_dir.file_name().unwrap().to_string_lossy();
     let post_output_dir = output_dir.join(&*post_name);
 
-    // Check if post is built by checking if the target directory has any
-    // timestamps older than any timestamp in the source directory.
-    // If it's older, continue.
-    // If it's newer, return Ok(None).
-    let post_build_timestamp = match fs::metadata(&post_output_dir) {
-        Ok(metadata) => metadata.modified().unwrap(),
-        Err(_) => std::time::SystemTime::UNIX_EPOCH,
-    };
-    let post_source_timestamp = match fs::metadata(&post_dir) {
-        Ok(metadata) => metadata.modified().unwrap(),
-        Err(_) => {
-            return Err(PostBuildError::GeneralIOError(
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Failed to get post directory metadata",
-                ), // NOTE: I should migrate to these errors instead of general IO handling whatever
-            ));
-        }
+    // Check if post is built. If it's good enough for GNU Make, it's good enough for me
+    // This just uses timestamps IF YOU COULDN'T TELL
+    let newest_post_timestamp = match find_newest_file(post_dir) {
+        Ok(t) => t,
+        Err(e) => return Err(PostBuildError::GeneralIOError(e)),
     };
 
-    if post_source_timestamp < post_build_timestamp {
-        return Ok(None);
-    }
+    let newest_post_build_timestamp = match find_newest_file(post_output_dir.as_path()) {
+        Ok(t) => t,
+        Err(_) => std::time::SystemTime::UNIX_EPOCH,
+    };
+
+    // If already built, just get the existing post's TS
+    if newest_post_build_timestamp > newest_post_timestamp {
+        println!("  Skipping already built post: {}", post_name);
+
+        // I feel dirty for using this. This feels like lib abuse.
+        let ts: DateTime<Local> = DateTime::from(newest_post_build_timestamp);
+        let ts_formatted = ts.format("%Y-%m-%d %H:%M:%S").to_string();
+
+        // Guh
+        return Ok(PostInfo {
+            name: post_name.to_string(),
+            title: post_config.get("Title").unwrap().to_string(),
+            description: post_config.get("Description").unwrap().to_string(),
+            timestamp_display: ts_formatted,
+            timestamp: ts.timestamp(),
+        });
+    };
 
     match fs::create_dir_all(&post_output_dir) {
         Ok(_) => (),
@@ -271,14 +275,14 @@ fn process_post(
     let current_local: DateTime<Local> = Local::now();
     let current_time = current_local.format("%Y-%m-%d %H:%M:%S").to_string();
 
-    Ok(Some(PostInfo {
+    Ok(PostInfo {
         // Unwrapping is fine here bc we error checked earlier
         name: post_name.to_string(),
         title: post_config.get("Title").unwrap().to_string(),
         description: post_config.get("Description").unwrap().to_string(),
         timestamp_display: current_time,
         timestamp: current_local.timestamp(),
-    }))
+    })
 }
 
 pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
@@ -299,4 +303,33 @@ pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn find_newest_file(dir: &Path) -> std::io::Result<std::time::SystemTime> {
+    let mut newest_time = std::time::SystemTime::UNIX_EPOCH;
+
+    if !dir.exists() {
+        return Ok(newest_time);
+    }
+
+    fn visit_dir(dir: &Path, newest_time: &mut std::time::SystemTime) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                visit_dir(&path, newest_time)?;
+            } else if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified_time) = metadata.modified() {
+                    if modified_time > *newest_time {
+                        *newest_time = modified_time;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    visit_dir(dir, &mut newest_time)?;
+    Ok(newest_time)
 }
