@@ -61,9 +61,11 @@ We'll get into each of the steps below.
 
 #### The index
 
-For now, the index is generated automatically, but is very basic.
-I'll figure out how to make it templated too soon:tm:. Regardless,
-it's available under ``target_dir/index.html``
+The index is handled as just any other post, except that its contents are
+automatically managed and put into a table for you. The index is configured
+through ``sources/index.toml`` and templated through 
+``sources/index_prelude.html``. See the part below on how to create and
+configure templates. The index ends up under ``target/index.html``
 
 #### The prelude and the options
 
