@@ -46,7 +46,7 @@ pub fn process_template(
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Tag '{}' not found in post.toml or site.toml", tag_name),
+                format!("Tag '{}' not found in any config", tag_name),
             ));
         };
 

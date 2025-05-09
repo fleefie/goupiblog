@@ -30,10 +30,12 @@ pub enum PostBuildError {
 #[allow(dead_code)]
 pub enum SiteBuildError {
     CannotLoadConfig(std::io::Error),
+    CannotLoadIndexConfig(std::io::Error),
     CannotLoadPrelude(std::io::Error),
     CannotLoadPosts(String),
     GeneralIOError(std::io::Error),
     MissingRequiredKey(String),
+    CannotBuildIndex(std::io::Error),
 }
 
 struct PostInfo {
@@ -53,6 +55,11 @@ pub fn build_site(source_dir: &PathBuf, output_dir: &PathBuf) -> Result<(), Site
     let site_config = match config::load_config(&source_dir.join("site.toml")) {
         Ok(config) => config,
         Err(e) => return Err(SiteBuildError::CannotLoadConfig(e)),
+    };
+
+    let index_config = match config::load_config(&source_dir.join("index.toml")) {
+        Ok(config) => config,
+        Err(e) => return Err(SiteBuildError::CannotLoadIndexConfig(e)),
     };
 
     for req_key in ["Site"] {
@@ -78,6 +85,14 @@ pub fn build_site(source_dir: &PathBuf, output_dir: &PathBuf) -> Result<(), Site
 
     let prelude_path = source_dir.join("prelude.html");
     let prelude = match fs::read_to_string(&prelude_path) {
+        Ok(content) => content,
+        Err(err) => {
+            return Err(SiteBuildError::CannotLoadPrelude(err));
+        }
+    };
+
+    let index_prelude_path = source_dir.join("index_prelude.html");
+    let index_prelude = match fs::read_to_string(&index_prelude_path) {
         Ok(content) => content,
         Err(err) => {
             return Err(SiteBuildError::CannotLoadPrelude(err));
@@ -134,6 +149,14 @@ pub fn build_site(source_dir: &PathBuf, output_dir: &PathBuf) -> Result<(), Site
         ));
     }
     posts_index.push_str("</ul></body></html>");
+
+    // Template the index.
+    let posts_index =
+        match process_template(&index_prelude, &index_config, &site_config, &posts_index) {
+            Ok(i) => i,
+            Err(e) => return Err(SiteBuildError::CannotBuildIndex(e)),
+        };
+
     match fs::write(output_dir.join("index.html"), posts_index) {
         Ok(_) => (),
         Err(e) => return Err(SiteBuildError::GeneralIOError(e)),
